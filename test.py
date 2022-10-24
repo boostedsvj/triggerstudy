@@ -81,7 +81,7 @@ def make_remote_file_local(remote, local=None):
 def trig_eff(tree, required_triggers):
     all_triggers = tree['TriggerPass'].title.split(',')
     required_decision_indices = ([ all_triggers.index(t) for t in required_triggers ])
-    decisions = tree['TriggerPass'].array().to_numpy()
+    decisions = tree['TriggerPass'].array().to_numpy() == 1
     decisions = decisions[:, required_decision_indices]
     assert decisions.shape == (tree.num_entries, len(required_triggers))
     passes = np.any(decisions, axis=1)
