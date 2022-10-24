@@ -6,6 +6,7 @@
 python3 -m venv env
 source env/bin/activate  # Needed every time
 pip install numpy uproot seutils matplotlib requests
+git clone git@github.com:boostedsvj/triggerstudy.git
 ```
 
 
