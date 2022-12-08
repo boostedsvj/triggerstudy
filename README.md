@@ -30,19 +30,6 @@ mv columns/2018/Summer20UL18 columns/2018/bkg
 
 ## Checking the madpt cut
 
-Download the samples with various boost cuts:
-
-```
-xrdcp -r root://cmseos.fnal.gov//store/user/lpcdarkqcd/boosted/orthogonalitystudy/HADD .
-mv HADD boost_samples
-```
-
-Turn the root files into dumb columns stored in a .npz file:
-
-```
-python test.py make_npzs_new -r boost_samples/madpt200_mz250_mdark10_rinv0.3.root -r boost_samples/madpt0_mz250_mdark10_rinv0.3.root -r boost_samples/madpt400_mz250_mdark10_rinv0.3.root -o boost_samples/
-```
-
 Plot the AK reco jet pt distribution:
 
 ```
