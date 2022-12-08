@@ -1,5 +1,5 @@
 from contextlib import contextmanager
-import os, os.path as osp, glob, copy, argparse, sys, uuid, logging, logging.config, re, shutil
+import os, os.path as osp, glob, copy, argparse, sys, uuid, logging, logging.config, re, shutil, pprint
 from time import strftime
 import numpy as np, uproot
 import awkward as ak
@@ -153,13 +153,18 @@ def get_record(key):
     return Record(eval(record_txt))
 
 
-class Hadd:
+class Columns:
+    """
+    Object that stores columns and metadata (e.g. model parameters, event count, ...).
+    Has a cross section lookup mechanism.
+    """
+
     @classmethod
     def from_files(cls, npzfiles):
-        hadd = cls.from_file(npzfiles[0])
+        columns = cls.from_file(npzfiles[0])
         for npzfile in npzfiles[1:]:
-            hadd.concat(cls.from_file(npzfile))
-        return hadd
+            columns.concat(cls.from_file(npzfile))
+        return columns
 
     @classmethod
     def from_file(cls, npzfile):
@@ -187,14 +192,14 @@ class Hadd:
             raise AttributeError
 
     def __getitem__(self, where):
-        new = Hadd()
+        new = Columns()
         new.metadata = copy.deepcopy(self.metadata)
         new.arrays = { k : v[where] for k, v in self.arrays.items() }
         return new
 
-    def concat(self, *hadds, **kwargs):
-        # Merge other hadds in
-        for other in hadds:
+    def concat(self, *columnss, **kwargs):
+        # Merge other columnss in
+        for other in columnss:
             for key, array in other.arrays.items():
                 if key in self.arrays:
                     self.arrays[key] = np.concatenate((self.arrays[key], array))
@@ -210,9 +215,6 @@ class Hadd:
     def save(self, outfile):
         logger.info(f'Saving to {outfile}')
         np.savez(outfile, metadata=self.metadata, arrays=self.arrays)
-
-    def set_metadata_from_filename(self, path):
-        self.metadata.update(metadata_from_filename(path))
 
     def trigger_eff_for_selection(self, selector, trig_pass_branch='trig_pass_wmet'):
         sel = self[selector(self)]
@@ -244,7 +246,7 @@ class Hadd:
 
     def apply_doublecounting_filter(self):
         """
-        Avoid double counting of ttbar events. Returns new instance of Hadd
+        Avoid double counting of ttbar and wjets events. Returns new instance of Columns
         """
         if self.is_bkg:
             if self.bkg=='ttjets':
@@ -327,32 +329,32 @@ class Hadd:
         return eff
 
 
-class MultipleHadds:
-    def __init__(self, hadds):
-        self.hadds = hadds
+class MultipleColumnss:
+    def __init__(self, columnss):
+        self.columnss = columnss
 
     @property
     def xs(self):
-        return sum(h.xs for h in self.hadds)
+        return sum(h.xs for h in self.columnss)
 
     def trig_eff(self, variable, axis, trig_pass_branch='trig_pass_wmet'):
         eff = np.zeros_like(axis)
-        for hadd in self.hadds:
-            eff += hadd.xs/self.xs * hadd.trig_eff(variable, axis, trig_pass_branch)
+        for columns in self.columnss:
+            eff += columns.xs/self.xs * columns.trig_eff(variable, axis, trig_pass_branch)
         return eff
 
     def trigger_eff_for_selection(self, selector, trig_pass_branch='trig_pass_wmet'):
         """
-        Simply a weighted version of trigger_eff_for_selection for single Hadd instances
+        Simply a weighted version of trigger_eff_for_selection for single Columns instances
         """
         pass_selection = 0.
         pass_selection_and_trigger = 0.
         eff = 0.
-        for hadd in self.hadds:
-            sel = hadd[selector(hadd)]
+        for columns in self.columnss:
+            sel = columns[selector(columns)]
             n_sel = sel.n
             n_sel_and_trig = sel.arrays[trig_pass_branch].sum()
-            weight = hadd.xs / self.xs
+            weight = columns.xs / self.xs
             pass_selection += weight * sel.n
             pass_selection_and_trigger += weight * sel.arrays[trig_pass_branch].sum()
             eff += weight * (n_sel_and_trig / n_sel if n_sel>0 else 1.)
@@ -421,7 +423,7 @@ def metadata_from_filename(path):
 
 def filename_from_metadata(metadata, ext='.npz'):
     """
-    Generate a filename for an Hadd class instance.
+    Generate a filename for an Columns class instance.
     """
     if 'bkg' in metadata:
         f = metadata['bkg']
@@ -448,8 +450,8 @@ def filename_from_metadata(metadata, ext='.npz'):
     return f
 
 
-def hadd_factory(rootfiles, nmax=None):
-    out = Hadd()
+def columns_factory(rootfiles, nmax=None, metadata=None):
+    out = Columns()
     ntodo = nmax
     for rootfile in rootfiles:
         with make_remote_file_local(rootfile) as (local, remote):
@@ -487,8 +489,43 @@ def hadd_factory(rootfiles, nmax=None):
                     break
 
     out.metadata['rootfiles'] = rootfiles
-    out.set_metadata_from_filename(rootfiles[0])
+    if metadata: out.metadata.update(metadata)
     return out
+
+
+class ColumnizeTask:
+    """
+    Container class that takes all needed input to create a Columns object.
+    Works with multiprocessing.
+    """
+    def __init__(self, rootfiles, dst, metadata=None, nmax=None):
+        self.metadata = metadata_from_filename(rootfiles[0]) if metadata is None else metadata
+        self.rootfiles = rootfiles
+        self.dst = dst
+        self.nmax = nmax
+
+    def __call__(self):
+        columns = columns_factory(self.rootfiles, self.nmax, self.metadata)
+        columns.save(self.dst)
+
+    def __repr__(self):
+        return (
+            f'ColumnizeTask: dst={self.dst}'
+            f' rootfiles=[{self.rootfiles[0]},...] ({len(self.rootfiles)})'
+            f' metadata={pprint.pformat(self.metadata)}'
+            f' nmax={self.nmax}'
+            )
+
+def task_runner(task):
+    """ Needed for multiprocessing """
+    task()
+
+def run_tasks(tasks, n_threads=8):
+    import multiprocessing as mp
+    p = mp.Pool(8)
+    p.map(task_runner, tasks)
+    p.close()
+    p.join()
 
 
 triggers_2018_nomet = [
@@ -520,13 +557,34 @@ triggers_2018_wmet = triggers_2018_nomet + [
     'HLT_PFHT800_PFMET85_PFMHT85_IDTight_v',
     ]
 
+@is_script
+def make_npzs_onetoone():
+    """
+    Creates one columnfile per rootfile
+    """
+    parser = argparse.ArgumentParser()
+    parser.add_argument('rootfiles', nargs='+')
+    parser.add_argument('-o', '--outdir', type=str)
+    args = parser.parse_args()
+
+    tasks = []
+    for rootfile in expand_wildcards(args.rootfiles):
+        dst = osp.join(
+            args.outdir if args.outdir else osp.dirname(rootfile),
+            osp.basename(rootfile).replace('.root','.npz')
+            )
+        tasks.append(ColumnizeTask([rootfile], dst))
+        print(f'Added {tasks[-1]}')
+
+    run_tasks(tasks)
+
 
 def worker(input):
     rootfiles, outdir, nmax = input
-    hadd = hadd_factory(rootfiles, nmax=nmax)
-    dst = osp.join(outdir, filename_from_metadata(hadd.metadata))
+    columns = columns_factory(rootfiles, nmax=nmax)
+    dst = osp.join(outdir, filename_from_metadata(columns.metadata))
     if not osp.isdir(outdir): os.makedirs(outdir)
-    hadd.save(dst)
+    columns.save(dst)
 
 @is_script
 def make_npzs_new():
@@ -586,15 +644,15 @@ def make_npz_worker(input):
         if not osp.isdir(outdir): os.makedirs(outdir)
         for wmet in [True, False]:
             triggers = triggers_2018_wmet if wmet else triggers_2018_nomet
-            hadd = hadd_factory([local], triggers)
-            hadd.set_metadata_from_filename(remote)
-            hadd.metadata['wmet'] = wmet
+            columns = columns_factory([local], triggers)
+            columns.set_metadata_from_filename(remote)
+            columns.metadata['wmet'] = wmet
             dst = osp.join(
                 outdir,
-                f'mz{hadd.metadata["mz"]}_mdark{hadd.metadata["mdark"]}'
-                f'_rinv{hadd.metadata["rinv"]:.1f}_{"wmet" if wmet else "nomet"}.npz'
+                f'mz{columns.metadata["mz"]}_mdark{columns.metadata["mdark"]}'
+                f'_rinv{columns.metadata["rinv"]:.1f}_{"wmet" if wmet else "nomet"}.npz'
                 )
-            hadd.save(dst)
+            columns.save(dst)
 
 
 
@@ -625,9 +683,9 @@ def trigger_plots():
     parser.add_argument('-o', '--outdir', type=str, default=strftime('plots_%b%d'))
     args = parser.parse_args()
 
-    hadds = [ Hadd.from_file(npz) for npz in args.npzs ]
-    hadds.sort(key=lambda h: h.mz)
-    wmet = hadds[0].metadata['wmet']
+    columnss = [ Columns.from_file(npz) for npz in args.npzs ]
+    columnss.sort(key=lambda h: h.mz)
+    wmet = columnss[0].metadata['wmet']
     wmet_label = '_wmet' if wmet else '_nomet'
 
     # ________________________________________________________
@@ -637,14 +695,14 @@ def trigger_plots():
     ax = fig.gca()
     jetpt_axis = np.linspace(0., 700., 100)
 
-    for hadd in hadds:
+    for columns in columnss:
         eff_jetpt = [
-            hadd.trigger_eff_for_selection((hadd.njets>0) & (hadd.jetpt > jetpt))
+            columns.trigger_eff_for_selection((columns.njets>0) & (columns.jetpt > jetpt))
             for jetpt in jetpt_axis
             ]
         dots = ax.plot(
             jetpt_axis, eff_jetpt, '.',
-            label=f'$m_{{Z\\prime}}$ = {hadd.mz}; $r_{{inv}}$ = {hadd.rinv:.1f}',
+            label=f'$m_{{Z\\prime}}$ = {columns.mz}; $r_{{inv}}$ = {columns.rinv:.1f}',
             )[0]
 
     ax.legend()
@@ -663,11 +721,11 @@ def trigger_plots():
     ax = fig.gca()
     ht_axis = np.linspace(0., 1200., 100)
 
-    for hadd in hadds:
-        eff_ht = [hadd.trigger_eff_for_selection(hadd.ht>ht) for ht in ht_axis]
+    for columns in columnss:
+        eff_ht = [columns.trigger_eff_for_selection(columns.ht>ht) for ht in ht_axis]
         ax.plot(
             ht_axis, eff_ht, '.',
-            label=f'$m_{{Z\\prime}}$ = {hadd.mz}; $r_{{inv}}$ = {hadd.rinv:.1f}',
+            label=f'$m_{{Z\\prime}}$ = {columns.mz}; $r_{{inv}}$ = {columns.rinv:.1f}',
             )
 
     ax.legend()
@@ -684,11 +742,11 @@ def trigger_plots():
     ax = fig.gca()
     met_axis = np.linspace(0., 1200., 100)
 
-    for hadd in hadds:
-        eff_met = [hadd.trigger_eff_for_selection(hadd.met>met)for met in met_axis]
+    for columns in columnss:
+        eff_met = [columns.trigger_eff_for_selection(columns.met>met)for met in met_axis]
         ax.plot(
             met_axis, eff_met, '.',
-            label=f'$m_{{Z\\prime}}$ = {hadd.mz}; $r_{{inv}}$ = {hadd.rinv:.1f}',
+            label=f'$m_{{Z\\prime}}$ = {columns.mz}; $r_{{inv}}$ = {columns.rinv:.1f}',
             )
 
     ax.legend()
@@ -707,16 +765,16 @@ def bkg_eff():
     args = parser.parse_args()
 
     bkgs = ['qcd', 'ttjets', 'wjets', 'zjets']
-    all_hadds = [ Hadd.from_file(npz) for npz in args.npzs ]
+    all_columnss = [ Columns.from_file(npz) for npz in args.npzs ]
     # Filter out the low pt QCD samples
-    all_hadds = [ h for h in all_hadds if h.metadata.get('pt', [1e9])[0]>150. ]
+    all_columnss = [ h for h in all_columnss if h.metadata.get('pt', [1e9])[0]>150. ]
 
     # Group them by bkg type (qcd/ttjets/wjets/zjets)
-    hadds = []
+    columnss = []
     for bkg in bkgs:
-        hadds_this_bkg = [h for h in all_hadds if h.bkg==bkg]
-        if len(hadds_this_bkg) > 0:
-            hadds.append(MultipleHadds(hadds_this_bkg))
+        columnss_this_bkg = [h for h in all_columnss if h.bkg==bkg]
+        if len(columnss_this_bkg) > 0:
+            columnss.append(MultipleColumnss(columnss_this_bkg))
 
     # ________________________________________________________
     # ptjet
@@ -725,11 +783,11 @@ def bkg_eff():
     ax = fig.gca()
     jetpt_axis = np.linspace(0., 700., 100)
 
-    for hadd in hadds:
-        eff_jetpt = hadd.trig_eff('jetpt', jetpt_axis)
+    for columns in columnss:
+        eff_jetpt = columns.trig_eff('jetpt', jetpt_axis)
         line = ax.plot(
             jetpt_axis, eff_jetpt, '.',
-            label=hadd.hadds[0].bkg,
+            label=columns.columnss[0].bkg,
             )[0]
         try:
             interpolation = Interpolation(jetpt_axis, eff_jetpt)
@@ -774,12 +832,12 @@ class Interpolation:
 def dump_eff_worker(input):
     bkg_dir, outdir, cut_varname, axis = input
     logger.info(f'Starting work on {bkg_dir}')
-    hadd = Hadd.from_files(seutils.ls_wildcard(bkg_dir + '/*.npz'))
-    eff_jetpt_wmet_noacc = hadd.trig_eff(cut_varname, axis, 'trig_pass_wmet', acc=False)
-    eff_jetpt_nomet_noacc = hadd.trig_eff(cut_varname, axis, 'trig_pass_nomet', acc=False)
+    columns = Columns.from_files(seutils.ls_wildcard(bkg_dir + '/*.npz'))
+    eff_jetpt_wmet_noacc = columns.trig_eff(cut_varname, axis, 'trig_pass_wmet', acc=False)
+    eff_jetpt_nomet_noacc = columns.trig_eff(cut_varname, axis, 'trig_pass_nomet', acc=False)
     eff_jetpt_wmet = np.maximum.accumulate(eff_jetpt_wmet_noacc)
     eff_jetpt_nomet = np.maximum.accumulate(eff_jetpt_nomet_noacc)
-    dst = osp.join(outdir, filename_from_metadata(hadd.metadata, ext='.eff'))
+    dst = osp.join(outdir, filename_from_metadata(columns.metadata, ext='.eff'))
     logger.info(f'Dumping to {dst}')
     np.savez(
         dst,
@@ -787,7 +845,7 @@ def dump_eff_worker(input):
         eff_nomet_noacc = eff_jetpt_nomet_noacc,
         eff_wmet = eff_jetpt_wmet,
         eff_nomet = eff_jetpt_nomet,
-        xs=hadd.xs, axis=axis
+        xs=columns.xs, axis=axis
         )
 
 @is_script
@@ -880,13 +938,13 @@ def plot_jetptdist():
     jetpt_axis = np.linspace(0., 600., 40)
     if args.highptzoomin: jetpt_axis = np.linspace(500., 800., 40)
 
-    hadds = [ Hadd.from_file(npz) for npz in expand_wildcards(args.npzs) ]
-    hadds.sort(key=lambda h: h.metadata['pt'][0] if 'pt' in h.metadata else 0)
+    columnss = [ Columns.from_file(npz) for npz in expand_wildcards(args.npzs) ]
+    columnss.sort(key=lambda h: h.metadata['pt'][0] if 'pt' in h.metadata else 0)
 
-    for hadd in hadds:
+    for columns in columnss:
         ax.hist(
-            hadd.arrays['jetpt'], jetpt_axis,
-            label=osp.basename(hadd.metadata['npz']).replace('.npz',''),
+            columns.arrays['jetpt'], jetpt_axis,
+            label=osp.basename(columns.metadata['npz']).replace('.npz',''),
             histtype=u'step',
             density=bool(args.highptzoomin)
             )
@@ -917,19 +975,19 @@ def plot_jetpt():
     ax = fig.gca()
     jetpt_axis = np.linspace(0., 700., 100)
 
-    hadds = [ Hadd.from_file(npz) for npz in expand_wildcards(args.npzs) ]
-    hadds.sort(key=lambda h: h.metadata['pt'][0] if 'pt' in h.metadata else 0)
+    columnss = [ Columns.from_file(npz) for npz in expand_wildcards(args.npzs) ]
+    columnss.sort(key=lambda h: h.metadata['pt'][0] if 'pt' in h.metadata else 0)
 
     if args.group:
-        hadds = [MultipleHadds(hadds)]
-        hadds[0].label = 'group'
+        columnss = [MultipleColumnss(columnss)]
+        columnss[0].label = 'group'
 
-    for hadd in hadds:
-        eff_jetpt = hadd.trig_eff('jetpt', jetpt_axis, args.trigpass)
+    for columns in columnss:
+        eff_jetpt = columns.trig_eff('jetpt', jetpt_axis, args.trigpass)
         line = ax.plot(
             jetpt_axis, eff_jetpt, '.',
-            label = hadd.metadata['npz'].split('/')[1].replace('.npz','')
-            # label=hadd.label
+            label = columns.metadata['npz'].split('/')[1].replace('.npz','')
+            # label=columns.label
             )[0]
 
         if args.fit:
@@ -938,12 +996,12 @@ def plot_jetpt():
                 ax.plot(*interpolation.fine(), c=line.get_color())
                 line.set_label(line.get_label() + f' 98%={interpolation.solve(.98):.1f} GeV')
             except ValueError:
-                logger.error(f'Could not interpolate {hadd.label}')
+                logger.error(f'Could not interpolate {columns.label}')
 
         if args.debug:
-            print(hadd.label)
+            print(columns.label)
             for jetpt in jetpt_axis:
-                sel = hadd[(hadd.njets>0) & (hadd.jetpt > jetpt)]
+                sel = columns[(columns.njets>0) & (columns.jetpt > jetpt)]
                 n_sel_and_trig = sel.arrays[args.trigpass].sum()
                 n_sel = sel.arrays[args.trigpass].shape[0]
                 print(
@@ -974,18 +1032,18 @@ def plot_jetpt_pizza():
     ax = fig.gca()
     jetpt_axis = np.linspace(0., 700., 100)
 
-    hadds = [ Hadd.from_file(npz) for npz in expand_wildcards(args.npzs) ]
-    hadds.sort(key=lambda h: h.metadata['pt'][0] if 'pt' in h.metadata else 0)
+    columnss = [ Columns.from_file(npz) for npz in expand_wildcards(args.npzs) ]
+    columnss.sort(key=lambda h: h.metadata['pt'][0] if 'pt' in h.metadata else 0)
 
-    def label(hadd):
-        m = hadd.metadata
+    def label(columns):
+        m = columns.metadata
         return rf'$m_{{Z\prime}}={m["mz"]:.0f}$, $r_{{inv}}={m["rinv"]:.1f}$'
 
-    for hadd in hadds:
-        eff_jetpt = hadd.trig_eff('jetpt', jetpt_axis, args.trigpass)
+    for columns in columnss:
+        eff_jetpt = columns.trig_eff('jetpt', jetpt_axis, args.trigpass)
         line = ax.plot(
             jetpt_axis, eff_jetpt, '.',
-            label = label(hadd)
+            label = label(columns)
             )[0]
 
         x_98_vals = []
@@ -995,7 +1053,7 @@ def plot_jetpt_pizza():
             x_98_vals.append(interpolation.solve(.98))
             # line.set_label(line.get_label() + f' 98%={interpolation.solve(.98):.1f} GeV')
         except ValueError:
-            logger.error(f'Could not interpolate {hadd.label}')
+            logger.error(f'Could not interpolate {columns.label}')
 
     mean_98 = sum(x_98_vals)/len(x_98_vals)
     ax.set_ylim(-.05, 1.05)
@@ -1016,11 +1074,11 @@ def plot_jetpt_pizza():
 def se_download_worker(input):
     npz_files, outdir = input
     logger.info(f'Working on {len(npz_files)} npz files, first one being {npz_files[0]}, outdir={outdir}')
-    hadd = Hadd.from_file(npz_files[0])
+    columns = Columns.from_file(npz_files[0])
     for npz_file in npz_files[1:]:
-        hadd.concat(Hadd.from_file(npz_file))
-    dst = osp.join(outdir, filename_from_metadata(hadd.metadata))
-    hadd.save(dst)
+        columns.concat(Columns.from_file(npz_file))
+    dst = osp.join(outdir, filename_from_metadata(columns.metadata))
+    columns.save(dst)
 
 def chunker(seq, size):
     return (seq[pos:pos + size] for pos in range(0, len(seq), size))
