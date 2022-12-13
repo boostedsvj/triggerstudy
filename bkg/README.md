@@ -61,11 +61,11 @@ To use it in python, do:
 
 ```python
 >>> import numpy as np, requests
->>> parameters = np.array(requests.get('https://raw.githubusercontent.com/boostedsvj/triggerstudy/main/jobs/bkg_trigeff_fit_2018.txt').json())
+>>> parameters = np.array(requests.get('https://raw.githubusercontent.com/boostedsvj/triggerstudy/main/bkg/bkg_trigeff_fit_2018.txt').json())
 >>> poly = np.poly1d(parameters)
 >>> fit = lambda x: np.where(x<800., 1./(1.+np.exp(-poly(x))), 1.)
 >>> fit(np.array([200., 500., 800., 2000.]))
-array([0.00143396, 0.83767488, 1.        , 1.        ])
+array([0.03298503, 0.94815078, 1.        , 1.        ])
 ```
 
 ![example fit](example_plots/bkgeff_fit.png)
