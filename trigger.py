@@ -126,3 +126,45 @@ class Interpolation:
         x = np.linspace(self.x[0], self.x[-1], n)
         return x, self(x)
 
+
+def filter_triggers(cols, incl_met=True):
+    triggers = svj.triggers_2018
+    if not incl_met: triggers = [t for t in triggers if 'MET' not in t]
+    indices = np.array([cols.metadata['trigger_titles'].index(t) for t in triggers])
+    return np.any(cols.arrays['triggers'][:,indices], axis=-1)
+
+
+def put_on_cmslabel(ax):
+    ax.text(
+        .0, 1.0,
+        r'\textbf{CMS}\,\fontsize{19pt}{3em}\selectfont{}{\textit{Simulation Preliminary}}',
+        horizontalalignment='left',
+        verticalalignment='bottom',
+        transform=ax.transAxes,
+        usetex=True,
+        fontsize=23
+        )
+    ax.text(
+        1.0, 1.0,
+        r'2018 (13 TeV)',
+        horizontalalignment='right',
+        verticalalignment='bottom',
+        transform=ax.transAxes,
+        usetex=True,
+        fontsize=19
+        )
+
+var_titles = {
+    'pt' : 'Leading AK8 $\mathrm{p}_\mathrm{T}$ (GeV)',
+    'pt_subl' : 'Subleading AK8 $\mathrm{p}_\mathrm{T}$ (GeV)',
+    'ht' : 'HT (GeV)',
+    'met' : 'MET (GeV)',
+    }
+
+# Define binning per variable
+binning = dict(
+    pt = np.linspace(0., 800., 50),
+    pt_subl = np.linspace(0., 800., 50),
+    ht = np.linspace(0., 1400., 60),
+    met = np.linspace(0., 700., 50),
+    )

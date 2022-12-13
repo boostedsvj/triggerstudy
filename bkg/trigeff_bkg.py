@@ -50,7 +50,9 @@ def main():
 
         h_notrig = collection.hists[args.var+'_'+bkg+'_notrig']
 
-        eff = h.counts / h_notrig.counts
+        
+        revcumsum = lambda x: np.cumsum(x[::-1])[::-1]
+        eff = revcumsum(h.counts) / revcumsum(h_notrig.counts)
         bin_centers = .5*(h_notrig.binning[:-1] + h_notrig.binning[1:])
 
         line = ax.plot(bin_centers, eff, 'o')[0]
@@ -64,7 +66,7 @@ def main():
             # should be suitable for poly1d
             y_tr = inv_sigmoid(eff)
             # High degree polynomial to capture the curve in detail
-            res = np.polyfit(bin_centers, y_tr, 20)
+            res = np.polyfit(bin_centers, y_tr, 15)
             fit = np.poly1d(res)
             x_fine = np.linspace(h_notrig.binning[1], h_notrig.binning[-1], 100)
             ax.plot(x_fine, sigmoid(fit(x_fine)), '-', color=line.get_color(), label='fit')
@@ -80,37 +82,11 @@ def main():
                 )
 
     ax.legend(fontsize=16)
-
-    ax.text(
-        .0, 1.0,
-        r'\textbf{CMS}\,\fontsize{19pt}{3em}\selectfont{}{\textit{Simulation Preliminary}}',
-        horizontalalignment='left',
-        verticalalignment='bottom',
-        transform=ax.transAxes,
-        usetex=True,
-        fontsize=23
-        )
-    ax.text(
-        1.0, 1.0,
-        r'2018 (13 TeV)',
-        horizontalalignment='right',
-        verticalalignment='bottom',
-        transform=ax.transAxes,
-        usetex=True,
-        fontsize=19
-        )
-
-    var_title = {
-        'pt' : 'Leading AK8 $\mathrm{p}_\mathrm{T}$ (GeV)',
-        'pt_subl' : 'Subleading AK8 $\mathrm{p}_\mathrm{T}$ (GeV)',
-        'ht' : 'HT (GeV)',
-        'met' : 'MET (GeV)',
-        }[args.var]
-
-    ax.set_xlabel(var_title)
+    trig.put_on_cmslabel(ax)
+    ax.set_xlabel(trig.var_titles[args.var])
     ax.set_ylabel('Efficiency')
 
-    outfile = 'bkgeff.png'
+    outfile = 'sigeff.png'
     plt.savefig(outfile, bbox_inches='tight')
     os.system(f'imgcat {outfile}')
 

@@ -1,4 +1,6 @@
-## Producing the trigger study columns for background
+# Trigger study of the background
+
+## Producing the trigger study columns
 
 Processing the entire background requires using jobs.
 
@@ -21,7 +23,7 @@ This creates small .npz files for every background .root TreeMaker file at the s
 
 ## Build histogram from all .npz files
 
-Use (modify the stageout directory):
+Use (modify the stageout directory to whatever you used for the jobs):
 
 ```bash
 python build_histogram.py root://cmseos.fnal.gov//store/user/lpcdarkqcd/triggerstudy/bkg_Dec08/TRIGCOL/Summer20UL18/*/*.npz

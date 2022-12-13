@@ -1,4 +1,5 @@
-import os, os.path as osp, multiprocessing as mp, json, argparse, itertools, traceback, re
+import os, os.path as osp, multiprocessing as mp, json, argparse, itertools, traceback, re, sys
+from time import strftime
 
 import tqdm
 import numpy as np
@@ -6,6 +7,8 @@ import seutils
 seutils.MAX_RECURSION_DEPTH = 1000
 
 import svj_ntuple_processing as svj
+sys.path.append(osp.dirname(osp.dirname(osp.abspath(__file__))))
+import trigger as trig
 
 
 class Histogram:
@@ -112,8 +115,8 @@ def worker(tup):
 
     try:
         cols = svj.Columns.load(npzfile)
-        passes_incl_met = filter_triggers(cols, True)
-        passes_no_met = filter_triggers(cols, False)
+        passes_incl_met = trig.filter_triggers(cols, True)
+        passes_no_met = trig.filter_triggers(cols, False)
         bkg = cols.metadata['bkg']
         
         with lock:
@@ -136,12 +139,6 @@ def worker(tup):
         svj.logger.error(f'Problem processing {npzfile}:\n{traceback.format_exc()}\n{cols.metadata}')
         raise
 
-def filter_triggers(cols, incl_met=True):
-    triggers = svj.triggers_2018
-    if not incl_met: triggers = [t for t in triggers if 'MET' not in t]
-    indices = np.array([cols.metadata['trigger_titles'].index(t) for t in triggers])
-    return np.any(cols.arrays['triggers'][:,indices], axis=-1)
-
 
 def main():
     parser = argparse.ArgumentParser()
@@ -150,32 +147,23 @@ def main():
 
     npzfiles = list(itertools.chain(*(get_npzfiles(pat) for pat in args.npzfiles)))
 
-    # HACK:
+    # Filter out QCD with pt<170
     pt_left = lambda f: int(re.search(r'Pt_(\d+)to', f).group(1))
-    npzfiles = [f for f in npzfiles if ('QCD' in f and pt_left(f) >= 170)]
+    npzfiles = [f for f in npzfiles if ('QCD' not in f or pt_left(f) >= 170)]
 
-    histograms_file = 'histograms_qcd170.json'
+    histograms_file = strftime('histograms_%b%d.json')
     variables = ['pt', 'ht', 'met', 'pt_subl']
     bkgs = ['qcd', 'ttjets', 'wjets', 'zjets']
 
     if not osp.isfile(histograms_file):
         histograms = HistogramCollection()
     
-        # Define binning per variable
-        binning = dict(
-            pt = np.linspace(0., 800., 50),
-            pt_subl = np.linspace(0., 800., 50),
-            ht = np.linspace(0., 1400., 60),
-            met = np.linspace(0., 700., 50),
-            )
-        # for v in binning.values(): v[-1] = np.inf # Last bin is overflow bin
-
         # Define the histograms
         for v in variables:
             for b in bkgs:
-                histograms.hists[v+'_'+b+'_notrig'] = Histogram(binning[v])
-                histograms.hists[v+'_'+b+'_inclmettrig'] = Histogram(binning[v])
-                histograms.hists[v+'_'+b+'_nomettrig'] = Histogram(binning[v])
+                histograms.hists[v+'_'+b+'_notrig'] = Histogram(trig.binning[v])
+                histograms.hists[v+'_'+b+'_inclmettrig'] = Histogram(trig.binning[v])
+                histograms.hists[v+'_'+b+'_nomettrig'] = Histogram(trig.binning[v])
 
         # Save empty histograms to a file
         histograms.save(histograms_file)
