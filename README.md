@@ -19,13 +19,7 @@ The signal columns can be produced quickly:
 python produce_signal_columns -d columns/2018/signal root://cmseos.fnal.gov//store/user/lpcdarkqcd/boosted/orthogonalitystudy/HADD/madpt0_mz250_mdark10_rinv0.3.root root://cmseos.fnal.gov//store/user/lpcdarkqcd/boosted/orthogonalitystudy/HADD/madpt200_mz250_mdark10_rinv0.3.root root://cmseos.fnal.gov//store/user/lpcdarkqcd/boosted/orthogonalitystudy/HADD/madpt400_mz250_mdark10_rinv0.3.root
 ```
 
-The background is too large to produce on the fly; see the [jobs](jobs) directory for more instructions. For doing the trigger study, download the precomputed columns:
-
-```
-mkdir -p columns/2018/bkg
-xrdcp -r --parallel 4 root://cmseos.fnal.gov//store/user/lpcdarkqcd/triggerstudy/bkg_Dec08/TRIGCOLHADD/Summer20UL18 columns/2018/
-mv columns/2018/Summer20UL18 columns/2018/bkg
-```
+The background is too large to produce on the fly; see the [bkg](bkg) directory for more instructions.
 
 
 ## Checking the madpt cut
