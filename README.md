@@ -1,4 +1,4 @@
-# Trigger 
+# Trigger study for the boosted SVJ analysis
 
 ## Setup
 
@@ -12,14 +12,28 @@ git clone git@github.com:boostedsvj/triggerstudy.git
 
 ## Producing/dowloading the columns
 
-The column files are .npz files that store the basic variables per event needed for the trigger study.
-The signal columns can be produced quickly:
+The column files are .npz files that store the basic variables per event needed for the trigger study: leading AK8 jet pT, HT, the trigger decisions per event, etc. The signal columns can be produced on the fly. The background is too large to produce on the fly; see the [bkg](bkg) directory for more instructions.
+
+
+For tuning the madpt cut:
 
 ```
-python produce_signal_columns -d columns/2018/signal root://cmseos.fnal.gov//store/user/lpcdarkqcd/boosted/orthogonalitystudy/HADD/madpt0_mz250_mdark10_rinv0.3.root root://cmseos.fnal.gov//store/user/lpcdarkqcd/boosted/orthogonalitystudy/HADD/madpt200_mz250_mdark10_rinv0.3.root root://cmseos.fnal.gov//store/user/lpcdarkqcd/boosted/orthogonalitystudy/HADD/madpt400_mz250_mdark10_rinv0.3.root
+python produce_signal_columns.py -d columns/madptcut_tuning root://cmseos.fnal.gov//store/user/lpcdarkqcd/boosted/orthogonalitystudy/HADD/madpt0_mz250_mdark10_rinv0.3.root root://cmseos.fnal.gov//store/user/lpcdarkqcd/boosted/orthogonalitystudy/HADD/madpt200_mz250_mdark10_rinv0.3.root root://cmseos.fnal.gov//store/user/lpcdarkqcd/boosted/orthogonalitystudy/HADD/madpt400_mz250_mdark10_rinv0.3.root
 ```
 
-The background is too large to produce on the fly; see the [bkg](bkg) directory for more instructions.
+For the trigger efficiency plots:
+
+```
+python produce_signal_columns.py -d columns/noboost root://cmseos.fnal.gov//store/user/lpcdarkqcd/MCSamples_UL_Spring2022_NOBOOST/HADD/*.root
+```
+
+## Plotting the trigger efficiency for signal
+
+```bash
+python plot_trigeff.py columns/noboost/*.npz
+```
+
+![signal eff curve](example_plots/sigeff.png)
 
 
 ## Checking the madpt cut
@@ -27,7 +41,7 @@ The background is too large to produce on the fly; see the [bkg](bkg) directory 
 Plot the AK reco jet pt distribution:
 
 ```
-python check_madpt_cut.py columns/signal/madpt*.npz
+python check_madpt_cut.py columns/madptcut_tuning/madpt*.npz
 ```
 
 ![pt distribution madpt](example_plots/madpt_ptjet_distribution.png)
@@ -35,7 +49,7 @@ python check_madpt_cut.py columns/signal/madpt*.npz
 `madpt0` and `madpt200` are quite alike, except that `madpt200` has way more statistics; this is expected, as there is a 170 GeV jet cut-off in TreeMaker. `madpt400` starts way higher into the spectrum, as expected. Zoom in on the tails:
 
 ```
-python check_madpt_cut.py columns/signal/madpt*.npz --highptzoomin
+python check_madpt_cut.py columns/madptcut_tuning/madpt*.npz --highptzoomin
 ```
 
 ![pt distribution madpt](example_plots/madpt_ptjet_distribution_highpt.png)
