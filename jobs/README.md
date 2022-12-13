@@ -66,4 +66,4 @@ To use it in python, do:
 array([0.00143396, 0.83767488, 1.        , 1.        ])
 ```
 
-![example fit](example_plots/bkgeff_fit.png | width=60)
+![example fit](example_plots/bkgeff_fit.png)
