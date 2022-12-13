@@ -47,7 +47,7 @@ This plots the curves + interpolations for all backgrounds individually (QCD, TT
 python trigeff_bkg.py histograms_Dec12.json --fit
 ```
 
-The resutling fit parameters are stored in `bkg_trigeff_fit_2018.txt`.
+The resulting fit parameters are stored in `bkg_trigeff_fit_2018.txt`.
 
 The fit function is essentially:
 
@@ -65,3 +65,5 @@ To use it in python, do:
 >>> fit(np.array([200., 500., 800., 2000.]))
 array([0.00143396, 0.83767488, 1.        , 1.        ])
 ```
+
+![example fit](example_plots/bkgeff_fit.png | width=60)
