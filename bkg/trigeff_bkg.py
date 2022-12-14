@@ -53,8 +53,10 @@ def main():
         
         revcumsum = lambda x: np.cumsum(x[::-1])[::-1]
         eff = revcumsum(h.counts) / revcumsum(h_notrig.counts)
-        print('Warning: using np.maximum.accumulate on efficiency')
-        eff = np.maximum.accumulate(eff)
+
+        if args.fit:
+            print('Warning: using np.maximum.accumulate on efficiency')
+            eff = np.maximum.accumulate(eff)
 
         bin_centers = .5*(h_notrig.binning[:-1] + h_notrig.binning[1:])
 
@@ -90,7 +92,7 @@ def main():
     ax.set_xlabel(trig.var_titles[args.var])
     ax.set_ylabel('Efficiency')
 
-    outfile = 'sigeff.png'
+    outfile = 'bkgeff.png'
     plt.savefig(outfile, bbox_inches='tight')
     os.system(f'imgcat {outfile}')
 
