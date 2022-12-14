@@ -12,15 +12,15 @@ import trigger as trig
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('npzfiles', type=str, nargs='+')
-    parser.add_argument('--var', type=str, default='pt', choices=['pt', 'pt_subl', 'ht', 'met'])
+    parser.add_argument('--var', type=str, default='pt', choices=trig.variables)
     parser.add_argument('--nomet', action='store_true')
     args = parser.parse_args()
 
     fig = plt.figure(figsize=(8,8))
     ax = fig.gca()
 
-    # binning = trig.binning[args.var]
-    binning = np.linspace(0., 630., 30)
+    binning = trig.binning[args.var]
+    # binning = np.linspace(0., 630., 30)
 
     bin_centers = .5*(binning[1:] + binning[:-1])
 
@@ -32,9 +32,6 @@ def main():
         revcumsum = lambda x: np.cumsum(x[::-1])[::-1]
         h_notrig = revcumsum(np.histogram(vals, binning)[0])
         h_trig = revcumsum(np.histogram(vals[passes], binning)[0])
-
-        
-
         eff = np.where(h_notrig!=0., h_trig/h_notrig, 0.)
 
         meta = col.metadata

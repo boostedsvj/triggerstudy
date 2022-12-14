@@ -108,6 +108,7 @@ def get_npzfiles(pat, cache_file='cache_npzfiles.json'):
     svj.logger.info(f'Dumping cache in {cache_file}')
     with open(cache_file, 'w') as f:
         json.dump(cache, f)
+    return cache[pat]
 
 
 def worker(tup):
@@ -143,6 +144,7 @@ def worker(tup):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('npzfiles', type=str, nargs='+')
+    parser.add_argument('-o', '--outfile', type=str, default=strftime('histograms_%b%d.json'))
     args = parser.parse_args()
 
     npzfiles = list(itertools.chain(*(get_npzfiles(pat) for pat in args.npzfiles)))
@@ -151,8 +153,8 @@ def main():
     pt_left = lambda f: int(re.search(r'Pt_(\d+)to', f).group(1))
     npzfiles = [f for f in npzfiles if ('QCD' not in f or pt_left(f) >= 170)]
 
-    histograms_file = strftime('histograms_%b%d.json')
-    variables = ['pt', 'ht', 'met', 'pt_subl']
+    histograms_file = args.outfile
+    variables = trig.variables
     bkgs = ['qcd', 'ttjets', 'wjets', 'zjets']
 
     if not osp.isfile(histograms_file):

@@ -16,7 +16,7 @@ BKGS = ['qcd', 'ttjets', 'wjets', 'zjets']
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('histograms_file', type=str)
-    parser.add_argument('--var', type=str, default='pt', choices=['pt', 'pt_subl', 'ht', 'met'])
+    parser.add_argument('--var', type=str, default='pt', choices=trig.variables)
     parser.add_argument('--bkg', type=str, nargs='*', default=['all'], choices=BKGS + ['comb', 'all'])
     parser.add_argument('--nomet', action='store_true')
     parser.add_argument('--fit', action='store_true')
@@ -53,6 +53,9 @@ def main():
         
         revcumsum = lambda x: np.cumsum(x[::-1])[::-1]
         eff = revcumsum(h.counts) / revcumsum(h_notrig.counts)
+        print('Warning: using np.maximum.accumulate on efficiency')
+        eff = np.maximum.accumulate(eff)
+
         bin_centers = .5*(h_notrig.binning[:-1] + h_notrig.binning[1:])
 
         line = ax.plot(bin_centers, eff, 'o')[0]
@@ -70,9 +73,10 @@ def main():
             fit = np.poly1d(res)
             x_fine = np.linspace(h_notrig.binning[1], h_notrig.binning[-1], 100)
             ax.plot(x_fine, sigmoid(fit(x_fine)), '-', color=line.get_color(), label='fit')
-            with open('bkg_trigeff_fit_2018.txt', 'w') as f:
+            outfile = 'bkg_trigeff_fit_2018.txt'
+            print('Dumping fit result to {}'.format(outfile))
+            with open(outfile, 'w') as f:
                 json.dump(list(res), f)
-
         else:
             interpolation = trig.Interpolation(bin_centers, eff)
             print(f'Eff for {bkg} at 500 GeV: {interpolation(500.)}')

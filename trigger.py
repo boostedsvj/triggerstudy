@@ -157,14 +157,22 @@ def put_on_cmslabel(ax):
 var_titles = {
     'pt' : 'Leading AK8 $\mathrm{p}_\mathrm{T}$ (GeV)',
     'pt_subl' : 'Subleading AK8 $\mathrm{p}_\mathrm{T}$ (GeV)',
+    'pt_ak15' : 'Leading AK15 $\mathrm{p}_\mathrm{T}$ (GeV)',
+    'pt_ak15_subl' : 'Subleading AK15 $\mathrm{p}_\mathrm{T}$ (GeV)',
     'ht' : 'HT (GeV)',
     'met' : 'MET (GeV)',
+    'mt_ak15_subl' : '$\mathrm{M}_\mathrm{T}$ of subleading AK15 jet (GeV)'
     }
 
 # Define binning per variable
 binning = dict(
     pt = np.linspace(0., 800., 50),
     pt_subl = np.linspace(0., 800., 50),
+    pt_ak15 = np.linspace(0., 800., 50),
+    pt_ak15_subl = np.linspace(0., 800., 50),
     ht = np.linspace(0., 1400., 60),
     met = np.linspace(0., 700., 50),
+    mt_ak15_subl = np.linspace(0., 1000., 40),
     )
+
+variables = list(sorted(binning.keys()))

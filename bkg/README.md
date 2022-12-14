@@ -29,13 +29,13 @@ Use (modify the stageout directory to whatever you used for the jobs):
 python build_histogram.py root://cmseos.fnal.gov//store/user/lpcdarkqcd/triggerstudy/bkg_Dec08/TRIGCOL/Summer20UL18/*/*.npz
 ```
 
-This combines all the data in the .npz files into histograms, before and after triggers are applied. The resulting file is e.g. `histograms_Dec12.json`.
+This combines all the data in the .npz files into histograms, before and after triggers are applied. The resulting file is e.g. `histograms_Dec14.json`.
 
 
 ## Plot the background efficiency curve
 
 ```bash
-python trigeff_bkg.py histograms_Dec12.json
+python trigeff_bkg.py histograms_Dec14.json
 ```
 
 This plots the curves + interpolations for all backgrounds individually (QCD, TTJets, WJets, ZJets) and the combined background.
@@ -46,7 +46,7 @@ This plots the curves + interpolations for all backgrounds individually (QCD, TT
 ## Fit the background efficiency curve
 
 ```bash
-python trigeff_bkg.py histograms_Dec12.json --fit
+python trigeff_bkg.py histograms_Dec14.json --fit
 ```
 
 The resulting fit parameters are stored in `bkg_trigeff_fit_2018.txt`.
@@ -63,9 +63,9 @@ To use it in python, do:
 >>> import numpy as np, requests
 >>> parameters = np.array(requests.get('https://raw.githubusercontent.com/boostedsvj/triggerstudy/main/bkg/bkg_trigeff_fit_2018.txt').json())
 >>> poly = np.poly1d(parameters)
->>> fit = lambda x: np.where(x<800., 1./(1.+np.exp(-poly(x))), 1.)
+>>> fit = lambda x: np.where(x<1000., 1./(1.+np.exp(-poly(x))), 1.)
 >>> fit(np.array([200., 500., 800., 2000.]))
-array([0.03298503, 0.94815078, 1.        , 1.        ])
+array([0.06567134, 0.90411038, 0.99410352, 1.        ])
 ```
 
 ![example fit](example_plots/bkgeff_fit.png)

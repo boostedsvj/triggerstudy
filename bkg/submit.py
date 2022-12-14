@@ -6,9 +6,9 @@ from jdlfactory import Group, logger
 group = Group.from_file('worker.py')
 group.venv(py3=True)
 group.sh('pip install uproot awkward seutils')
-group.sh('pip install https://github.com/boostedsvj/svj_ntuple_processing/archive/main.zip')
+group.sh('pip install svj_ntuple_processing==0.7')
 
-group.group_data['stageout'] = 'root://cmseos.fnal.gov//store/user/lpcdarkqcd/triggerstudy/bkg_Dec08/TRIGCOL/'
+group.group_data['stageout'] = 'root://cmseos.fnal.gov//store/user/lpcdarkqcd/triggerstudy/bkg_Dec13/TRIGCOL/'
 
 base = 'root://cmseos.fnal.gov//store/user/lpcsusyhad/SusyRA2Analysis2015/Run2ProductionV20/Summer20UL18/'
 cache_file = 'cache_rootfiles.txt'
